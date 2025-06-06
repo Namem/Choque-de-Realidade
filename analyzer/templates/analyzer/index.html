@@ -1,0 +1,43 @@
+{% extends "analyzer/base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="text-center mb-4">
+        <h1>Analisador de Circuitos CA Monofásico</h1>
+        <p class="lead">Insira a descrição do circuito no formato netlist para iniciar a análise.</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <h5 class="card-header">Entrada do Circuito (Netlist)</h5>
+                <div class="card-body">
+                    <form id="circuit-form">
+                        <div class="mb-3">
+                            <label for="netlist-input" class="form-label">Cole ou digite sua netlist aqui:</label>
+                            <textarea class="form-control" id="netlist-input" rows="12" spellcheck="false" style="font-family: monospace;">
+* Exemplo de Circuito RLC Série
+VS 1 0 120 0 60
+R1 1 2 10
+L1 2 3 0.05
+C1 3 0 0.0001
+                            </textarea>
+                        </div>
+                        <button type="button" id="analyze-button" class="btn btn-primary w-100">Analisar Circuito</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <h5 class="card-header">Resultados da Análise</h5>
+                <div class="card-body">
+                    <p>Os resultados da análise aparecerão aqui.</p>
+                    <div id="results-output" style="font-family: monospace; white-space: pre-wrap; background-color: #212529; padding: 15px; border-radius: 5px;">Aguardando análise...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
