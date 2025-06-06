@@ -1,0 +1,85 @@
+/* === Tema escuro elegante para o Analisador de Circuitos === */
+
+body {
+    background-color: #1e1e2f;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.3rem;
+}
+
+.card {
+    background-color: #2a2a40;
+    border: 1px solid #3d3d5c;
+    color: #f1f1f1;
+}
+
+.card-header {
+    background-color: #2e2e4a;
+    border-bottom: 1px solid #444;
+    font-weight: bold;
+}
+
+textarea.form-control {
+    background-color: #101020;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+textarea.form-control:focus {
+    border-color: #5d9fff;
+    box-shadow: 0 0 0 0.2rem rgba(93, 159, 255, 0.25);
+}
+
+button.btn-primary {
+    background-color: #3d70ff;
+    border-color: #3d70ff;
+}
+
+button.btn-primary:hover {
+    background-color: #335edc;
+}
+
+#results-output {
+    background-color: #111122;
+    border: 1px solid #444;
+    color: #9ff;
+    font-size: 0.95rem;
+}
+
+ul.nav-tabs .nav-link.active {
+    background-color: #3a3a50;
+    border-color: #555 #555 #2a2a40;
+    color: #fff;
+}
+
+ul.nav-tabs .nav-link {
+    color: #bbb;
+}
+
+ul.nav-tabs .nav-link:hover {
+    color: #fff;
+}
+
+.tab-content {
+    animation: fadein 0.3s;
+}
+
+@keyframes fadein {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+
+    .card-header {
+        font-size: 1rem;
+    }
+}
