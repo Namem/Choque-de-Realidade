@@ -102,7 +102,7 @@ def solve_circuit_mna(components):
         raise RuntimeError("Matriz singular. O circuito pode estar mal definido (ex: flutuando).")
     
     # Formata os resultados
-    results = {'nodes': node_list}
+    results = {'nodes': node_list, 'frequency': frequency} # <-- ADICIONE A FREQUÊNCIA AQUI
     for i, node_num in enumerate(node_list):
         voltage_phasor = solution[i]
         magnitude = abs(voltage_phasor)
