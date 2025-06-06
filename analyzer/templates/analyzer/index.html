@@ -1,63 +1,46 @@
 {% extends "analyzer/base.html" %}
 
 {% block content %}
-<style>
-    .main-container { display: flex; height: calc(100vh - 72px); }
-    .sidebar { width: 240px; flex-shrink: 0; padding: 1rem; border-right: 1px solid #444; overflow-y: auto; }
-    .editor-main { flex-grow: 1; position: relative; padding: 1rem; }
-    #editor-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #2b3035; }
-    .component-btn { cursor: pointer; }
-</style>
-
-<div class="main-container">
-    <div class="sidebar">
-        <h5>Componentes</h5>
-        <ul id="component-palette" class="list-group list-group-flush mb-4">
-            <li class="list-group-item list-group-item-action component-btn" data-component="VoltageSource"><i class="bi bi-bullseye"></i> Fonte de Tensão</li>
-            <li class="list-group-item list-group-item-action component-btn" data-component="Resistor"><i class="bi bi-border-width"></i> Resistor</li>
-            <li class="list-group-item list-group-item-action component-btn" data-component="Inductor"><i class="bi bi-arrow-clockwise"></i> Indutor</li>
-            <li class="list-group-item list-group-item-action component-btn" data-component="Capacitor"><i class="bi bi-distribute-vertical"></i> Capacitor</li>
-            <li class="list-group-item list-group-item-action component-btn" data-component="Ground"><i class="bi bi-reception-0"></i> Terra</li>
-        </ul>
-
-        <div class="d-grid gap-2">
-             <button id="analyze-button" class="btn btn-primary">Analisar Circuito</button>
-        </div>
-       
-        <hr>
-        <div id="results-card">
-            <h5 class="mt-4">Resultados</h5>
-            <div id="results-output" style="font-family: monospace; white-space: pre-wrap; font-size: 0.8rem;">Aguardando...</div>
-            <canvas id="phasor-diagram-canvas" class="mt-3"></canvas>
-            <canvas id="waveform-chart-canvas" class="mt-3"></canvas>
-        </div>
+<div class="container mt-4">
+    <div class="text-center mb-4">
+        <h1>Choque de Realidade</h1>
+        <p class="lead">Analisador de Circuitos de Corrente Alternada</p>
     </div>
 
-    <main class="editor-main d-flex flex-column">
-        <ul class="nav nav-tabs" id="editorTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="visual-tab" data-bs-toggle="tab" data-bs-target="#visual-editor-pane" type="button" role="tab">Editor Visual</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="netlist-tab" data-bs-toggle="tab" data-bs-target="#netlist-editor-pane" type="button" role="tab">Editor Netlist</button>
-            </li>
-        </ul>
-
-        <div class="tab-content flex-grow-1" id="editorTabContent" style="position: relative;">
-            <div class="tab-pane fade show active h-100" id="visual-editor-pane" role="tabpanel">
-                <div id="editor-container"></div>
-            </div>
-            <div class="tab-pane fade h-100 p-3" id="netlist-editor-pane" role="tabpanel">
-                <textarea class="form-control h-100" id="netlist-input" spellcheck="false" style="font-family: monospace; resize: none;">
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <h5 class="card-header">Entrada do Circuito (Netlist)</h5>
+                <div class="card-body">
+                    <form id="circuit-form">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="netlist-input" class="form-label">Insira a descrição do circuito:</label>
+                            <textarea class="form-control" id="netlist-input" rows="15" spellcheck="false" style="font-family: monospace; resize: none;">
 * Exemplo de Circuito RLC Série
 VS 1 0 120 0 60
 R1 1 2 10
 L1 2 3 0.05
 C1 3 0 0.0001
-                </textarea>
+                            </textarea>
+                        </div>
+                        <button type="button" id="analyze-button" class="btn btn-primary w-100">Analisar Circuito</button>
+                    </form>
+                </div>
             </div>
         </div>
-    </main>
+
+        <div class="col-lg-7">
+            <div class="card">
+                 <h5 class="card-header">Resultados da Análise</h5>
+                <div class="card-body">
+                    <div id="results-output" style="font-family: monospace; white-space: pre-wrap; margin-bottom: 1rem; background-color: #212529; padding: 1rem; border-radius: 0.25rem;">Aguardando análise...</div>
+                    <canvas id="phasor-diagram-canvas" style="margin-bottom: 1rem;"></canvas>
+                    <canvas id="waveform-chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock content %}
 
@@ -74,8 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let phasorChart = null;
     let waveformChart = null;
-    
-    // --- LÓGICA DE ANÁLISE (REUTILIZÁVEL) ---
+
+    // --- LÓGICA DE ANÁLISE ---
+    analyzeButton.addEventListener('click', () => {
+        const netlistText = netlistInput.value;
+        runAnalysis(netlistText);
+    });
+
     function runAnalysis(netlistText) {
         resultsOutput.style.color = 'inherit';
         resultsOutput.textContent = 'Analisando...';
@@ -92,17 +80,41 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                let formattedResults = "Análise Concluída:\n\n";
-                const results = data.results;
-                for (const key in results) {
-                    if (key.startsWith('V(')) {
-                        const nodeVoltage = results[key];
-                        formattedResults += `${key}: Magnitude = ${nodeVoltage.magnitude.toFixed(4)} V, Fase = ${nodeVoltage.phase_deg.toFixed(4)}°\n`;
-                    }
+                const { system_summary, node_voltages, branch_currents } = data.results;
+                let formattedResults = "--- RESUMO DO SISTEMA ---\n";
+                
+                if (system_summary && system_summary.equivalent_impedance) {
+                    const Zeq = system_summary.equivalent_impedance;
+                    formattedResults += `Zeq: ${Zeq.magnitude.toFixed(2)} Ω ∠ ${Zeq.phase_deg.toFixed(2)}°\n`;
                 }
+                if (system_summary && system_summary.complex_power) {
+                    const S = system_summary.complex_power;
+                    formattedResults += `Pot. Ativa (P):    ${S.P.toFixed(2)} W\n`;
+                    formattedResults += `Pot. Reativa (Q):  ${S.Q.toFixed(2)} VAR\n`;
+                    formattedResults += `Pot. Aparente (S): ${S.S.toFixed(2)} VA\n`;
+                }
+                 if (system_summary && system_summary.power_factor) {
+                    const FP = system_summary.power_factor;
+                    formattedResults += `Fator de Potência: ${FP.value.toFixed(4)} ${FP.type}\n`;
+                }
+
+                formattedResults += "\n--- TENSÕES NOS NÓS ---\n";
+                for (const key in node_voltages) {
+                    const V = node_voltages[key];
+                    formattedResults += `${key}: ${V.magnitude.toFixed(2)} V ∠ ${V.phase_deg.toFixed(2)}°\n`;
+                }
+                
+                formattedResults += "\n--- CORRENTES NOS RAMOS ---\n";
+                 for (const key in branch_currents) {
+                    const I = branch_currents[key];
+                    formattedResults += `${key}: ${(I.magnitude * 1000).toFixed(2)} mA ∠ ${I.phase_deg.toFixed(2)}°\n`;
+                }
+
                 resultsOutput.textContent = formattedResults;
-                createPhasorDiagram(results);
-                createWaveformChart(results);
+                
+                phasorChart = createPhasorDiagram(phasorCanvasCtx, data.results);
+                waveformChart = createWaveformChart(waveformCanvasCtx, data.results);
+
             } else {
                 resultsOutput.style.color = 'red';
                 resultsOutput.textContent = `Erro: ${data.error}`;
@@ -118,46 +130,55 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- CONFIGURAÇÃO DO EDITOR VISUAL (KONVA) ---
-    const container = document.getElementById('editor-container');
-    const stage = new Konva.Stage({
-        container: 'editor-container',
-        width: container.clientWidth,
-        height: container.clientHeight,
-    });
-    const layer = new Konva.Layer();
-    stage.add(layer);
-
-    const componentButtons = document.querySelectorAll('.component-btn');
-    componentButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const compType = button.getAttribute('data-component');
-            addComponentToStage(compType);
-        });
-    });
-
-    function addComponentToStage(type) { /* ...código de adicionar componente... (sem alteração) */ }
-    function addComponentToStage(type) {const group = new Konva.Group({x: 100, y: 100, draggable: true,}); let shape; if (type === 'Resistor') {shape = new Konva.Rect({ width: 80, height: 30, stroke: 'cyan', strokeWidth: 2 }); group.add(shape); group.add(new Konva.Text({ text: 'R', fontSize: 18, fill: 'cyan', x: 35, y: 5 }));} else if (type === 'VoltageSource') {shape = new Konva.Circle({ radius: 30, stroke: 'magenta', strokeWidth: 2 }); group.add(shape); group.add(new Konva.Text({ text: '+', fontSize: 18, fill: 'magenta', x: -5, y: -25 })); group.add(new Konva.Text({ text: '-', fontSize: 24, fill: 'magenta', x: -3, y: 5 }));} else {shape = new Konva.Rect({ width: 60, height: 60, stroke: 'white', strokeWidth: 1, dash: [5, 5] }); group.add(shape); group.add(new Konva.Text({ text: type.charAt(0), fontSize: 24, fill: 'white', x: 22, y: 18 }));} layer.add(group);}
-
-
-    // --- LÓGICA DO BOTÃO "ANALISAR" INTELIGENTE ---
-    analyzeButton.addEventListener('click', () => {
-        const netlistTab = document.getElementById('netlist-tab');
-        if (netlistTab.classList.contains('active')) {
-            const netlistText = netlistInput.value;
-            runAnalysis(netlistText);
-        } else {
-            alert('A análise a partir do editor visual ainda será implementada!');
-            // Futuramente: const netlist = generateNetlistFromStage(); runAnalysis(netlist);
-        }
-    });
-
     // --- FUNÇÕES AUXILIARES ---
-    function getCookie(name) {let cookieValue = null; if (document.cookie && document.cookie !== '') {const cookies = document.cookie.split(';'); for (let i = 0; i < cookies.length; i++) {const cookie = cookies[i].trim(); if (cookie.substring(0, name.length + 1) === (name + '=')) {cookieValue = decodeURIComponent(cookie.substring(name.length + 1)); break;}}} return cookieValue;}
-    function createPhasorDiagram(results) { /* ...código do diagrama fasorial... */ }
-    function createPhasorDiagram(results) {const datasets = []; const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']; let colorIndex = 0; for (const key in results) {if (key.startsWith('V(')) {const voltage = results[key]; const magnitude = voltage.magnitude; const phaseRad = voltage.phase_deg * (Math.PI / 180); const x = magnitude * Math.cos(phaseRad); const y = magnitude * Math.sin(phaseRad); datasets.push({label: key, data: [{x: 0, y: 0}, {x: x, y: y}], borderColor: colors[colorIndex % colors.length], backgroundColor: colors[colorIndex % colors.length], showLine: true, tension: 0}); colorIndex++;}} phasorChart = new Chart(phasorCanvasCtx, {type: 'scatter', data: {datasets: datasets}, options: {scales: {x: {type: 'linear', position: 'center', grid: {color: '#444'}}, y: {type: 'linear', position: 'center', grid: {color: '#444'}}}, plugins: {legend: {position: 'top',}, title: {display: true, text: 'Diagrama Fasorial'}}}});}
-    function createWaveformChart(results) { /* ...código das formas de onda... */ }
-    function createWaveformChart(results) {const frequency = results.frequency; if (!frequency) return; const omega = 2 * Math.PI * frequency; const period = 1 / frequency; const datasets = []; const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']; let colorIndex = 0; const timePoints = Array.from({length: 101}, (_, i) => (i / 100) * 2 * period); for (const key in results) {if (key.startsWith('V(')) {const voltage = results[key]; const magnitude = voltage.magnitude; const phaseRad = voltage.phase_deg * (Math.PI / 180); const waveData = timePoints.map(t => { return { x: t, y: magnitude * Math.sin(omega * t + phaseRad) }; }); datasets.push({label: key, data: waveData, borderColor: colors[colorIndex % colors.length], fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0}); colorIndex++;}} waveformChart = new Chart(waveformCanvasCtx, {type: 'line', data: {datasets: datasets}, options: {scales: {x: {type: 'linear', title: {display: true, text: 'Tempo (s)'}}, y: {title: {display: true, text: 'Tensão (V)'}}}, plugins: {legend: {position: 'top',}, title: {display: true, text: 'Formas de Onda no Tempo'}}}});}
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function createPhasorDiagram(ctx, results) {
+        const datasets = [];
+        const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+        let colorIndex = 0;
+        // Adiciona Tensões
+        for (const key in results.node_voltages) {
+            const V = results.node_voltages[key];
+            const x = V.magnitude * Math.cos(V.phase_deg * Math.PI / 180);
+            const y = V.magnitude * Math.sin(V.phase_deg * Math.PI / 180);
+            datasets.push({label: key, data: [{x: 0, y: 0}, {x: x, y: y}], borderColor: colors[colorIndex % colors.length], showLine: true, tension: 0});
+            colorIndex++;
+        }
+        return new Chart(ctx, {type: 'scatter', data: {datasets: datasets}, options: {scales: {x: {type: 'linear', position: 'center', grid: {color: '#444'}}, y: {type: 'linear', position: 'center', grid: {color: '#444'}}}, plugins: {legend: {position: 'top'}, title: {display: true, text: 'Diagrama Fasorial (Tensões)'}}}});
+    }
+
+    function createWaveformChart(ctx, results) {
+        const frequency = results.frequency;
+        if (!frequency) return null;
+        const omega = 2 * Math.PI * frequency;
+        const period = 1 / frequency;
+        const datasets = [];
+        const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+        let colorIndex = 0;
+        const timePoints = Array.from({length: 101}, (_, i) => (i / 100) * 2 * period);
+        // Adiciona Tensões
+        for (const key in results.node_voltages) {
+            const V = results.node_voltages[key];
+            const waveData = timePoints.map(t => ({ x: t, y: V.magnitude * Math.sin(omega * t + (V.phase_deg * Math.PI / 180)) }));
+            datasets.push({label: key, data: waveData, borderColor: colors[colorIndex % colors.length], fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0});
+            colorIndex++;
+        }
+        return new Chart(ctx, {type: 'line', data: {datasets: datasets}, options: {scales: {x: {type: 'linear', title: {display: true, text: 'Tempo (s)'}}, y: {title: {display: true, text: 'Tensão (V)'}}}, plugins: {legend: {position: 'top'}, title: {display: true, text: 'Formas de Onda (Tensões)'}}}});
+    }
 });
 </script>
 {% endblock javascript %}
