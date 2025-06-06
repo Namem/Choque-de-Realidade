@@ -77,18 +77,23 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const { system_summary, node_voltages, branch_currents, derived_calculations } = data.results;
-
+                const { system_summary, node_voltages, branch_currents } = data.results;
                 let formattedResults = "--- RESUMO DO SISTEMA ---\n";
-                if (system_summary?.equivalent_impedance)
-                    formattedResults += `Zeq: ${system_summary.equivalent_impedance.magnitude.toFixed(2)} Ω ∠ ${system_summary.equivalent_impedance.phase_deg.toFixed(2)}°\n`;
-                if (system_summary?.complex_power) {
-                    formattedResults += `Pot. Ativa (P):    ${system_summary.complex_power.P.toFixed(2)} W\n`;
-                    formattedResults += `Pot. Reativa (Q):  ${system_summary.complex_power.Q.toFixed(2)} VAR\n`;
-                    formattedResults += `Pot. Aparente (S): ${system_summary.complex_power.S.toFixed(2)} VA\n`;
+
+                if (system_summary?.equivalent_impedance) {
+                    const Zeq = system_summary.equivalent_impedance;
+                    formattedResults += `Zeq: ${Zeq.magnitude.toFixed(2)} Ω ∠ ${Zeq.phase_deg.toFixed(2)}°\n`;
                 }
-                if (system_summary?.power_factor)
-                    formattedResults += `Fator de Potência: ${system_summary.power_factor.value.toFixed(4)} ${system_summary.power_factor.type}\n`;
+                if (system_summary?.complex_power) {
+                    const S = system_summary.complex_power;
+                    formattedResults += `Pot. Ativa (P):    ${S.P.toFixed(2)} W\n`;
+                    formattedResults += `Pot. Reativa (Q):  ${S.Q.toFixed(2)} VAR\n`;
+                    formattedResults += `Pot. Aparente (S): ${S.S.toFixed(2)} VA\n`;
+                }
+                if (system_summary?.power_factor) {
+                    const FP = system_summary.power_factor;
+                    formattedResults += `Fator de Potência: ${FP.value.toFixed(4)} ${FP.type}\n`;
+                }
 
                 formattedResults += "\n--- TENSÕES NOS NÓS ---\n";
                 for (const key in node_voltages) {
@@ -102,19 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     formattedResults += `${key}: ${(I.magnitude * 1000).toFixed(2)} mA ∠ ${I.phase_deg.toFixed(2)}°\n`;
                 }
 
-                if (derived_calculations && derived_calculations.length > 0) {
-                    formattedResults += "\n--- CÁLCULOS DERIVADOS DOS COMPONENTES ---\n";
-                    derived_calculations.forEach(comp => {
-                        formattedResults += `${comp.id} (${comp.type}):\n`;
-                        if (comp.reactance) formattedResults += `  Reatância: ${comp.reactance.toFixed(2)} Ω\n`;
-                        formattedResults += `  Impedância: ${comp.impedance_rect} (retangular), ${comp.impedance_polar} (polar)\n`;
-                    });
-                }
-
                 resultsOutput.textContent = formattedResults;
-
                 phasorChart = createPhasorDiagram(phasorCanvasCtx, data.results);
                 waveformChart = createWaveformChart(waveformCanvasCtx, data.results);
+
             } else {
                 resultsOutput.style.color = 'red';
                 resultsOutput.textContent = `Erro: ${data.error}`;
@@ -131,18 +127,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getCookie(name) {
-        const cookies = document.cookie.split(';');
-        for (let cookie of cookies) {
-            cookie = cookie.trim();
-            if (cookie.startsWith(name + '=')) return decodeURIComponent(cookie.substring(name.length + 1));
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            for (const cookie of document.cookie.split(';')) {
+                const c = cookie.trim();
+                if (c.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(c.slice(name.length + 1));
+                    break;
+                }
+            }
         }
-        return null;
+        return cookieValue;
     }
 
     function createPhasorDiagram(ctx, results) {
         const datasets = [];
         const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
         let colorIndex = 0;
+
         for (const key in results.node_voltages) {
             const V = results.node_voltages[key];
             const x = V.magnitude * Math.cos(V.phase_deg * Math.PI / 180);
@@ -150,22 +152,39 @@ document.addEventListener('DOMContentLoaded', () => {
             datasets.push({
                 label: key,
                 data: [{ x: 0, y: 0 }, { x, y }],
-                borderColor: colors[colorIndex++ % colors.length],
+                borderColor: colors[colorIndex % colors.length],
                 showLine: true,
                 tension: 0
             });
+            colorIndex++;
         }
+
+        for (const key in results.branch_currents) {
+            const I = results.branch_currents[key];
+            const x = I.magnitude * Math.cos(I.phase_deg * Math.PI / 180);
+            const y = I.magnitude * Math.sin(I.phase_deg * Math.PI / 180);
+            datasets.push({
+                label: `I: ${key}`,
+                data: [{ x: 0, y: 0 }, { x, y }],
+                borderColor: colors[colorIndex % colors.length],
+                borderDash: [5, 5],
+                showLine: true,
+                tension: 0
+            });
+            colorIndex++;
+        }
+
         return new Chart(ctx, {
             type: 'scatter',
             data: { datasets },
             options: {
                 scales: {
-                    x: { type: 'linear', grid: { color: '#444' } },
-                    y: { type: 'linear', grid: { color: '#444' } }
+                    x: { type: 'linear', position: 'center', grid: { color: '#444' } },
+                    y: { type: 'linear', position: 'center', grid: { color: '#444' } }
                 },
                 plugins: {
                     legend: { position: 'top' },
-                    title: { display: true, text: 'Diagrama Fasorial (Tensões)' }
+                    title: { display: true, text: 'Diagrama Fasorial (Tensões e Correntes)' }
                 }
             }
         });
@@ -176,37 +195,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!frequency) return null;
         const omega = 2 * Math.PI * frequency;
         const period = 1 / frequency;
-        const timePoints = Array.from({ length: 101 }, (_, i) => (i / 100) * 2 * period);
         const datasets = [];
         const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
         let colorIndex = 0;
+        const timePoints = Array.from({ length: 101 }, (_, i) => (i / 100) * 2 * period);
+
         for (const key in results.node_voltages) {
             const V = results.node_voltages[key];
-            const waveData = timePoints.map(t => ({
-                x: t,
-                y: V.magnitude * Math.sin(omega * t + V.phase_deg * Math.PI / 180)
-            }));
+            const waveData = timePoints.map(t => ({ x: t, y: V.magnitude * Math.sin(omega * t + (V.phase_deg * Math.PI / 180)) }));
             datasets.push({
                 label: key,
                 data: waveData,
-                borderColor: colors[colorIndex++ % colors.length],
+                borderColor: colors[colorIndex % colors.length],
                 fill: false,
                 tension: 0.1,
                 borderWidth: 2,
                 pointRadius: 0
             });
+            colorIndex++;
         }
+
+        for (const key in results.branch_currents) {
+            const I = results.branch_currents[key];
+            const waveData = timePoints.map(t => ({ x: t, y: I.magnitude * Math.sin(omega * t + (I.phase_deg * Math.PI / 180)) }));
+            datasets.push({
+                label: `I: ${key}`,
+                data: waveData,
+                borderColor: colors[colorIndex % colors.length],
+                fill: false,
+                tension: 0.1,
+                borderWidth: 2,
+                pointRadius: 0,
+                borderDash: [5, 5]
+            });
+            colorIndex++;
+        }
+
         return new Chart(ctx, {
             type: 'line',
             data: { datasets },
             options: {
                 scales: {
                     x: { type: 'linear', title: { display: true, text: 'Tempo (s)' } },
-                    y: { title: { display: true, text: 'Tensão (V)' } }
+                    y: { title: { display: true, text: 'Amplitude' } }
                 },
                 plugins: {
                     legend: { position: 'top' },
-                    title: { display: true, text: 'Formas de Onda (Tensões)' }
+                    title: { display: true, text: 'Formas de Onda (Tensões e Correntes)' }
                 }
             }
         });
